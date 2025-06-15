@@ -1,4 +1,4 @@
-Name: Android APK Build (PyQt6 with python-for-android)
+name: Android APK Build (PyQt6 with python-for-android)
 
 on:
   push:
@@ -133,4 +133,4 @@ jobs:
         echo "- **Download APK:** Check the 'Artifacts' section below for the generated APK file."
         echo "---"
         echo "If the build failed, review the logs above for specific error messages."
-
+        
