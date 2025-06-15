@@ -47,22 +47,24 @@ jobs:
         cache-dependency-path: requirements_dev.txt
 
     - name: Create Python Virtual Environment
+      id: create_venv
       run: |
         echo "Creating Python virtual environment..."
         python -m venv .venv_p4a
-        # Aktiviere die venv kurz, um die Pip-Version zu prüfen.
         echo "##[group]Activate venv and check pip version"
         source .venv_p4a/bin/activate
         pip --version
         echo "##[endgroup]"
+        echo "VENV_PATH=$(pwd)/.venv_p4a" >> $GITHUB_OUTPUT
 
     - name: Install python-for-android (P4A) and essential build dependencies
+      env:
+        PIP_REQUIRE_VIRTUALENV: "true"
       run: |
+        VENV_BIN="${{ steps.create_venv.outputs.VENV_PATH }}/bin"
         echo "Installing essential Python packages into .venv_p4a..."
-        # Sicherstellen, dass die venv für diese Shell aktiviert ist.
-        source .venv_p4a/bin/activate
-        pip install --upgrade pip setuptools wheel
-        pip install python-for-android==2024.1.21
+        "${VENV_BIN}/pip" install --upgrade pip setuptools wheel
+        "${VENV_BIN}/pip" install python-for-android==2024.1.21
 
         echo "Installing necessary system dependencies for P4A..."
         sudo apt-get update
@@ -81,11 +83,12 @@ jobs:
           patchelf
 
     - name: Install Project-Specific Python Dependencies
+      env:
+        PIP_REQUIRE_VIRTUALENV: "true"
       run: |
+        VENV_BIN="${{ steps.create_venv.outputs.VENV_PATH }}/bin"
         echo "Installing project requirements from requirements_dev.txt into .venv_p4a..."
-        # Sicherstellen, dass die venv für diese Shell aktiviert ist.
-        source .venv_p4a/bin/activate
-        pip install -r requirements_dev.txt
+        "${VENV_BIN}/pip" install -r requirements_dev.txt
 
     - name: Determine Build Parameters
       id: build_params
@@ -98,11 +101,13 @@ jobs:
 
     - name: Build Android APK with python-for-android
       run: |
+        VENV_PATH="${{ steps.create_venv.outputs.VENV_PATH }}"
         echo "Starting python-for-android APK build using .venv_p4a interpreter..."
         # Verwende eine Subshell, um die Venv zu aktivieren und dann den p4a-Befehl auszuführen.
-        # Dies stellt sicher, dass die Umgebung für diesen einen Befehl korrekt gesetzt ist.
+        # Setze PYTHONPATH innerhalb der Subshell, um sicherzustellen, dass es für den Python-Aufruf gültig ist.
         (
-          source .venv_p4a/bin/activate && \
+          source "${VENV_PATH}/bin/activate" && \
+          export PYTHONPATH="${VENV_PATH}/lib/python3.10/site-packages" && \
           python -m python_for_android.toolchain create \
             --dist-name=voiceclon_app_dist \
             --name="VoiceClon AI" \
