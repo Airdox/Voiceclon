@@ -43,26 +43,21 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-        # Cache ist hier weniger kritisch, da wir eine venv verwenden, aber kann bleiben
         cache: 'pip'
         # HIER DEN PFAD ANPASSEN, WIE VORHER BESPROCHEN!
         cache-dependency-path: requirements_dev.txt # ODER 'src/requirements_dev.txt' etc.
 
-    - name: Create and Activate Python Virtual Environment # NEUER SCHRITT: Erstelle und aktiviere eine venv
+    - name: Create Python Virtual Environment # NEUER SCHRITT: Erstelle die venv (ohne Aktivierung in dieser Shell)
       run: |
         echo "Creating Python virtual environment..."
-        python -m venv venv_p4a # Erstellt eine venv im Root-Ordner namens 'venv_p4a'
-        source venv_p4a/bin/activate # Aktiviert die venv für nachfolgende Befehle in diesem Schritt
+        python -m venv .venv_p4a # Erstellt eine venv im Root-Ordner namens '.venv_p4a' (Punkt macht sie versteckt)
 
-        echo "Installing pip and setuptools within venv..."
-        pip install --upgrade pip setuptools wheel # Aktualisiere Pip in der venv
-
-    - name: Install python-for-android (P4A) and essential build dependencies # Installiere in die venv
-      # Alle pip installs werden jetzt in die venv geleitet, da sie im vorherigen Schritt aktiviert wurde
+    - name: Install python-for-android (P4A) and essential build dependencies # Installiere in die venv über den expliziten Pfad
       run: |
-        source venv_p4a/bin/activate # Re-aktiviere die venv, um sicherzustellen, dass sie aktiv ist
-        echo "Installing python-for-android within venv..."
-        pip install python-for-android
+        echo "Installing essential Python packages into .venv_p4a..."
+        # Verwende den expliziten Pfad zum pip-Executable in der venv
+        .venv_p4a/bin/pip install --upgrade pip setuptools wheel
+        .venv_p4a/bin/pip install python-for-android
 
         echo "Installing necessary system dependencies for P4A..."
         sudo apt-get update
@@ -80,11 +75,11 @@ jobs:
           libjemalloc-dev \
           patchelf
 
-    - name: Install Project-Specific Python Dependencies # Installiere in die venv
+    - name: Install Project-Specific Python Dependencies # Installiere in die venv über den expliziten Pfad
       run: |
-        source venv_p4a/bin/activate # Re-aktiviere die venv
-        echo "Installing project requirements from requirements_dev.txt within venv..."
-        pip install -r requirements_dev.txt
+        echo "Installing project requirements from requirements_dev.txt into .venv_p4a..."
+        # Verwende den expliziten Pfad zum pip-Executable in der venv
+        .venv_p4a/bin/pip install -r requirements_dev.txt
 
     - name: Determine Build Parameters
       id: build_params
@@ -95,11 +90,11 @@ jobs:
         echo "target_arch=${TARGET_ARCH}" >> "$GITHUB_OUTPUT"
         echo "Determined Build Type: $BUILD_TYPE, Target Architecture: $TARGET_ARCH"
 
-    - name: Build Android APK with python-for-android # Führe den Build in der venv aus
+    - name: Build Android APK with python-for-android # Führe den Build mit dem expliziten Venv-Interpreter aus
       run: |
-        source venv_p4a/bin/activate # Re-aktiviere die venv, damit p4a gefunden wird
-        echo "Starting python-for-android APK build within venv..."
-        python -m python_for_android.toolchain create \
+        echo "Starting python-for-android APK build using .venv_p4a interpreter..."
+        # Verwende den expliziten Pfad zum Python-Executable in der venv, um p4a.toolchain aufzurufen
+        .venv_p4a/bin/python -m python_for_android.toolchain create \
           --dist-name=voiceclon_app_dist \
           --name="VoiceClon AI" \
           --package=com.airdox.voiceclon.ai \
