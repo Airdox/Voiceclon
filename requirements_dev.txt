@@ -1,0 +1,6 @@
+pytest
+pytest-qt
+pytest-cov
+PyQt6
+# Add other dependencies like Coqui TTS etc. later when actual implementation is done
+# For now, focusing on test structure and GUI testing
