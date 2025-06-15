@@ -1,0 +1,115 @@
+name: Robust Android APK Build (PyQt6 via P4A) # Aussagekräftiger Name für den Workflow
+
+on:
+  push:
+    branches:
+      - main # Primärer Branch für automatische Builds bei jedem Push
+      - master # Inkludiere master für ältere Projekte oder wenn du beide nutzt
+  pull_request:
+    branches:
+      - main # Auch bei Pull Requests bauen, um Build-Fehler frühzeitig zu erkennen
+      - master
+  workflow_dispatch: # Ermöglicht das manuelle Starten des Workflows über die GitHub UI
+    inputs:
+      build_type:
+        description: 'Type of build (debug or release)'
+        required: false
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+      target_arch:
+        description: 'Target CPU Architecture for Android'
+        required: false
+        default: 'arm64-v8a'
+        type: choice
+        options:
+          - arm64-v8a
+          - armeabi-v7a
+          - 'arm64-v8a,armeabi-v7a' # Für Multi-Arch-Builds
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest # Aktuellste Ubuntu-Version für maximale Kompatibilität und Performance
+
+    steps:
+    - name: Checkout Repository Code # Immer der erste Schritt, um den Code verfügbar zu machen
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Wichtig für einige Git-Operationen oder wenn Build-Tools Git-Historie benötigen
+
+    - name: Set up Python Environment (3.10) # P4A und PyQt6 harmonieren gut mit 3.10+
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip' # Nutze den pip-Cache von GitHub Actions für schnellere Installationen
+        cache-dependency-path: requirements_dev.txt # Pfad zu deiner Abhängigkeitsdatei
+
+    - name: Install python-for-android (P4A) and build essentials # Installiere P4A und die notwendigen Build-Tools
+      run: |
+        python -m pip install --upgrade pip setuptools wheel # Aktuallisiere essentielle Python-Tools
+        pip install python-for-android # P4A installieren
+        # Installiere System-Abhängigkeiten, die P4A für den Android-Build benötigt (basierend auf Ubuntu)
+        # Dies ist entscheidend für eine stabile P4A-Umgebung!
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libjemalloc-dev \
+          patchelf # patchelf ist oft für ARM-Binärdateien nützlich
+
+    - name: Install Project-Specific Python Dependencies # Installiere nur, wenn für den Buildprozess auf dem Runner notwendig
+      # Beachte: P4A verwaltet seine eigenen Abhängigkeiten für das Android-Paket selbst.
+      # Diese Installation ist nur dann relevant, wenn du Build-Skripte hast, die diese auf dem Runner benötigen.
+      run: |
+        pip install -r requirements_dev.txt # Installiert pytest, pytest-qt, PyQt6 etc.
+
+    - name: Determine Build Parameters # Flexibilität durch Inputs für manuelle Ausführung
+      id: build_params
+      run: |
+        BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}" # Default ist 'debug'
+        TARGET_ARCH="${{ github.event.inputs.target_arch || 'arm64-v8a' }}" # Default ist 'arm64-v8a'
+        echo "build_type=${BUILD_TYPE}" >> "$GITHUB_OUTPUT"
+        echo "target_arch=${TARGET_ARCH}" >> "$GITHUB_OUTPUT"
+
+    - name: Build Android APK with python-for-android # Der Herzschlag des Workflows
+      # Hier werden alle Parameter sorgfältig konfiguriert für einen robusten Build.
+      # Anpassungen für dein spezifisches Projekt sind hier essentiell!
+      run: |
+        python -m python_for_android.toolchain create \
+          --dist-name=voiceclon_app_dist \ # Ein eindeutiger Name für die P4A-Distribution
+          --name="VoiceClon AI" \ # Der Anzeigename der App auf dem Gerät
+          --package=com.airdox.voiceclon.ai \ # Dein eindeutiger Paketname (muss Java-Konventionen folgen!)
+          --requirements=python3,pyqt6,requests,numpy,scipy,sqlite3,speechrecognition,pydub \ # Wichtige Pakete für KI/Spracherkennung
+          --bootstrap=sdl2 \ # sdl2 ist eine gute Wahl für GUI-Apps (PyQt). Alternativ 'webview' für Web-basierte UIs.
+          --private . \ # Der Pfad zu deinem Python-Projektcode relativ zum Repository-Root
+          --version=1.0.0 \ # Die Version deiner App (semantische Versionierung empfohlen)
+          --build-toolchain=android \ # Explizit die Android-Toolchain nutzen
+          --arch="${{ steps.build_params.outputs.target_arch }}" \ # Nutzt die ausgewählte Architektur
+          --enable-jni \ # Wenn du JNI-Komponenten nutzt (oft von PyQt benötigt)
+          ${{ steps.build_params.outputs.build_type }} # 'debug' oder 'release' (für release sind weitere Schritte für Keystore nötig!)
+
+    - name: Upload Generated APK as Artifact # Macht die APK im GitHub Actions Run herunterladbar
+      uses: actions/upload-artifact@v4
+      with:
+        name: voiceclon-android-apk-${{ steps.build_params.outputs.build_type }}-${{ steps.build_params.outputs.target_arch }} # Dynamischer Name für besseren Überblick
+        path: bin/*.apk # P4A legt die APKs standardmäßig im 'bin'-Ordner ab
+        retention-days: 7 # Die Artefakte werden 7 Tage lang gespeichert
+
+    - name: Notify on Completion (Optional) # Ein Kniff für besseres Feedback
+      if: always() # Führt diesen Schritt immer aus, egal ob der Build erfolgreich war oder nicht
+      run: |
+        echo "Android APK build for VoiceClon App completed."
+        echo "Build Type: ${{ steps.build_params.outputs.build_type }}"
+        echo "Target Arch: ${{ steps.build_params.outputs.target_arch }}"
+        echo "Check 'Artifacts' for the generated APK."
+
