@@ -1,15 +1,15 @@
-name: Robust Android APK Build (PyQt6 via P4A) # Aussagekräftiger Name für den Workflow
+name: Android APK Build (PyQt6 with python-for-android)
 
 on:
   push:
     branches:
-      - main # Primärer Branch für automatische Builds bei jedem Push
-      - master # Inkludiere master für ältere Projekte oder wenn du beide nutzt
+      - main
+      - master
   pull_request:
     branches:
-      - main # Auch bei Pull Requests bauen, um Build-Fehler frühzeitig zu erkennen
+      - main
       - master
-  workflow_dispatch: # Ermöglicht das manuelle Starten des Workflows über die GitHub UI
+  workflow_dispatch:
     inputs:
       build_type:
         description: 'Type of build (debug or release)'
@@ -27,31 +27,44 @@ on:
         options:
           - arm64-v8a
           - armeabi-v7a
-          - 'arm64-v8a,armeabi-v7a' # Für Multi-Arch-Builds
+          - 'arm64-v8a,armeabi-v7a'
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest # Aktuellste Ubuntu-Version für maximale Kompatibilität und Performance
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository Code # Immer der erste Schritt, um den Code verfügbar zu machen
+    - name: Checkout Repository Code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Wichtig für einige Git-Operationen oder wenn Build-Tools Git-Historie benötigen
+        fetch-depth: 0
 
-    - name: Set up Python Environment (3.10) # P4A und PyQt6 harmonieren gut mit 3.10+
+    - name: Set up Python Environment (3.10)
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-        cache: 'pip' # Nutze den pip-Cache von GitHub Actions für schnellere Installationen
-        cache-dependency-path: requirements_dev.txt # Pfad zu deiner Abhängigkeitsdatei
+        # Cache ist hier weniger kritisch, da wir eine venv verwenden, aber kann bleiben
+        cache: 'pip'
+        # HIER DEN PFAD ANPASSEN, WIE VORHER BESPROCHEN!
+        cache-dependency-path: requirements_dev.txt # ODER 'src/requirements_dev.txt' etc.
 
-    - name: Install python-for-android (P4A) and build essentials # Installiere P4A und die notwendigen Build-Tools
+    - name: Create and Activate Python Virtual Environment # NEUER SCHRITT: Erstelle und aktiviere eine venv
       run: |
-        python -m pip install --upgrade pip setuptools wheel # Aktuallisiere essentielle Python-Tools
-        pip install python-for-android # P4A installieren
-        # Installiere System-Abhängigkeiten, die P4A für den Android-Build benötigt (basierend auf Ubuntu)
-        # Dies ist entscheidend für eine stabile P4A-Umgebung!
+        echo "Creating Python virtual environment..."
+        python -m venv venv_p4a # Erstellt eine venv im Root-Ordner namens 'venv_p4a'
+        source venv_p4a/bin/activate # Aktiviert die venv für nachfolgende Befehle in diesem Schritt
+
+        echo "Installing pip and setuptools within venv..."
+        pip install --upgrade pip setuptools wheel # Aktualisiere Pip in der venv
+
+    - name: Install python-for-android (P4A) and essential build dependencies # Installiere in die venv
+      # Alle pip installs werden jetzt in die venv geleitet, da sie im vorherigen Schritt aktiviert wurde
+      run: |
+        source venv_p4a/bin/activate # Re-aktiviere die venv, um sicherzustellen, dass sie aktiv ist
+        echo "Installing python-for-android within venv..."
+        pip install python-for-android
+
+        echo "Installing necessary system dependencies for P4A..."
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
@@ -65,51 +78,56 @@ jobs:
           libncurses5-dev \
           libncursesw5-dev \
           libjemalloc-dev \
-          patchelf # patchelf ist oft für ARM-Binärdateien nützlich
+          patchelf
 
-    - name: Install Project-Specific Python Dependencies # Installiere nur, wenn für den Buildprozess auf dem Runner notwendig
-      # Beachte: P4A verwaltet seine eigenen Abhängigkeiten für das Android-Paket selbst.
-      # Diese Installation ist nur dann relevant, wenn du Build-Skripte hast, die diese auf dem Runner benötigen.
+    - name: Install Project-Specific Python Dependencies # Installiere in die venv
       run: |
-        pip install -r requirements_dev.txt # Installiert pytest, pytest-qt, PyQt6 etc.
+        source venv_p4a/bin/activate # Re-aktiviere die venv
+        echo "Installing project requirements from requirements_dev.txt within venv..."
+        pip install -r requirements_dev.txt
 
-    - name: Determine Build Parameters # Flexibilität durch Inputs für manuelle Ausführung
+    - name: Determine Build Parameters
       id: build_params
       run: |
-        BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}" # Default ist 'debug'
-        TARGET_ARCH="${{ github.event.inputs.target_arch || 'arm64-v8a' }}" # Default ist 'arm64-v8a'
+        BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+        TARGET_ARCH="${{ github.event.inputs.target_arch || 'arm64-v8a' }}"
         echo "build_type=${BUILD_TYPE}" >> "$GITHUB_OUTPUT"
         echo "target_arch=${TARGET_ARCH}" >> "$GITHUB_OUTPUT"
+        echo "Determined Build Type: $BUILD_TYPE, Target Architecture: $TARGET_ARCH"
 
-    - name: Build Android APK with python-for-android # Der Herzschlag des Workflows
-      # Hier werden alle Parameter sorgfältig konfiguriert für einen robusten Build.
-      # Anpassungen für dein spezifisches Projekt sind hier essentiell!
+    - name: Build Android APK with python-for-android # Führe den Build in der venv aus
       run: |
+        source venv_p4a/bin/activate # Re-aktiviere die venv, damit p4a gefunden wird
+        echo "Starting python-for-android APK build within venv..."
         python -m python_for_android.toolchain create \
-          --dist-name=voiceclon_app_dist \ # Ein eindeutiger Name für die P4A-Distribution
-          --name="VoiceClon AI" \ # Der Anzeigename der App auf dem Gerät
-          --package=com.airdox.voiceclon.ai \ # Dein eindeutiger Paketname (muss Java-Konventionen folgen!)
-          --requirements=python3,pyqt6,requests,numpy,scipy,sqlite3,speechrecognition,pydub \ # Wichtige Pakete für KI/Spracherkennung
-          --bootstrap=sdl2 \ # sdl2 ist eine gute Wahl für GUI-Apps (PyQt). Alternativ 'webview' für Web-basierte UIs.
-          --private . \ # Der Pfad zu deinem Python-Projektcode relativ zum Repository-Root
-          --version=1.0.0 \ # Die Version deiner App (semantische Versionierung empfohlen)
-          --build-toolchain=android \ # Explizit die Android-Toolchain nutzen
-          --arch="${{ steps.build_params.outputs.target_arch }}" \ # Nutzt die ausgewählte Architektur
-          --enable-jni \ # Wenn du JNI-Komponenten nutzt (oft von PyQt benötigt)
-          ${{ steps.build_params.outputs.build_type }} # 'debug' oder 'release' (für release sind weitere Schritte für Keystore nötig!)
+          --dist-name=voiceclon_app_dist \
+          --name="VoiceClon AI" \
+          --package=com.airdox.voiceclon.ai \
+          --requirements=python3,pyqt6,requests,numpy,scipy,sqlite3,speechrecognition,pydub \
+          --bootstrap=sdl2 \
+          --private . \
+          --version=1.0.0 \
+          --build-toolchain=android \
+          --arch="${{ steps.build_params.outputs.target_arch }}" \
+          --enable-jni \
+          ${{ steps.build_params.outputs.build_type }}
 
-    - name: Upload Generated APK as Artifact # Macht die APK im GitHub Actions Run herunterladbar
+    - name: Upload Generated APK as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: voiceclon-android-apk-${{ steps.build_params.outputs.build_type }}-${{ steps.build_params.outputs.target_arch }} # Dynamischer Name für besseren Überblick
-        path: bin/*.apk # P4A legt die APKs standardmäßig im 'bin'-Ordner ab
-        retention-days: 7 # Die Artefakte werden 7 Tage lang gespeichert
+        name: voiceclon-android-apk-${{ steps.build_params.outputs.build_type }}-${{ steps.build_params.outputs.target_arch }}
+        path: bin/*.apk
+        retention-days: 7
 
-    - name: Notify on Completion (Optional) # Ein Kniff für besseres Feedback
-      if: always() # Führt diesen Schritt immer aus, egal ob der Build erfolgreich war oder nicht
+    - name: Notify on Completion
+      if: always()
       run: |
-        echo "Android APK build for VoiceClon App completed."
-        echo "Build Type: ${{ steps.build_params.outputs.build_type }}"
-        echo "Target Arch: ${{ steps.build_params.outputs.target_arch }}"
-        echo "Check 'Artifacts' for the generated APK."
+        echo "## Android APK build for VoiceClon App completed."
+        echo "### Build Details:"
+        echo "- **Build Type:** ${{ steps.build_params.outputs.build_type }}"
+        echo "- **Target Architecture:** ${{ steps.build_params.outputs.target_arch }}"
+        echo "- **Download APK:** Check the 'Artifacts' section below for the generated APK file."
+        echo "---"
+        echo "If the build failed, review the logs above for specific error messages."
+
 
