@@ -64,7 +64,7 @@ jobs:
         # Aktiviere die venv erneut für diese Shell, um sicherzustellen, dass pip richtig ist
         source .venv_p4a/bin/activate
         pip install --upgrade pip setuptools wheel
-        pip install python-for-android==2023.10.20 # Eine spezifische, bekannte Version hilft bei Konsistenz
+        pip install python-for-android==2024.1.21 # <-- HIER WURDE DIE VERSION ANGEPASST
 
         echo "Installing necessary system dependencies for P4A..."
         sudo apt-get update
@@ -133,4 +133,3 @@ jobs:
         echo "- **Download APK:** Check the 'Artifacts' section below for the generated APK file."
         echo "---"
         echo "If the build failed, review the logs above for specific error messages."
-        
