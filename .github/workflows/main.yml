@@ -44,15 +44,13 @@ jobs:
       with:
         python-version: '3.10'
         cache: 'pip'
-        # HIER DEN PFAD ANPASSEN, WIE VORHER BESPROCHEN!
-        cache-dependency-path: requirements_dev.txt # ODER 'src/requirements_dev' etc.
+        cache-dependency-path: requirements_dev.txt
 
     - name: Create Python Virtual Environment
       run: |
         echo "Creating Python virtual environment..."
         python -m venv .venv_p4a
-        # Aktiviere die venv, um sicherzustellen, dass alle folgenden pip- und python-Befehle
-        # in dieser Umgebung ausgeführt werden.
+        # Aktiviere die venv kurz, um die Pip-Version zu prüfen.
         echo "##[group]Activate venv and check pip version"
         source .venv_p4a/bin/activate
         pip --version
@@ -61,10 +59,10 @@ jobs:
     - name: Install python-for-android (P4A) and essential build dependencies
       run: |
         echo "Installing essential Python packages into .venv_p4a..."
-        # Aktiviere die venv erneut für diese Shell, um sicherzustellen, dass pip richtig ist
+        # Sicherstellen, dass die venv für diese Shell aktiviert ist.
         source .venv_p4a/bin/activate
         pip install --upgrade pip setuptools wheel
-        pip install python-for-android==2024.1.21 # <-- HIER WURDE DIE VERSION ANGEPASST
+        pip install python-for-android==2024.1.21
 
         echo "Installing necessary system dependencies for P4A..."
         sudo apt-get update
@@ -85,7 +83,7 @@ jobs:
     - name: Install Project-Specific Python Dependencies
       run: |
         echo "Installing project requirements from requirements_dev.txt into .venv_p4a..."
-        # Aktiviere die venv erneut für diese Shell
+        # Sicherstellen, dass die venv für diese Shell aktiviert ist.
         source .venv_p4a/bin/activate
         pip install -r requirements_dev.txt
 
@@ -101,20 +99,23 @@ jobs:
     - name: Build Android APK with python-for-android
       run: |
         echo "Starting python-for-android APK build using .venv_p4a interpreter..."
-        # Aktiviere die venv für diese Shell, bevor p4a aufgerufen wird
-        source .venv_p4a/bin/activate
-        python -m python_for_android.toolchain create \
-          --dist-name=voiceclon_app_dist \
-          --name="VoiceClon AI" \
-          --package=com.airdox.voiceclon.ai \
-          --requirements=python3,pyqt6,requests,numpy,scipy,sqlite3,speechrecognition,pydub \
-          --bootstrap=sdl2 \
-          --private . \
-          --version=1.0.0 \
-          --build-toolchain=android \
-          --arch="${{ steps.build_params.outputs.target_arch }}" \
-          --enable-jni \
-          ${{ steps.build_params.outputs.build_type }}
+        # Verwende eine Subshell, um die Venv zu aktivieren und dann den p4a-Befehl auszuführen.
+        # Dies stellt sicher, dass die Umgebung für diesen einen Befehl korrekt gesetzt ist.
+        (
+          source .venv_p4a/bin/activate && \
+          python -m python_for_android.toolchain create \
+            --dist-name=voiceclon_app_dist \
+            --name="VoiceClon AI" \
+            --package=com.airdox.voiceclon.ai \
+            --requirements=python3,pyqt6,requests,numpy,scipy,sqlite3,speechrecognition,pydub \
+            --bootstrap=sdl2 \
+            --private . \
+            --version=1.0.0 \
+            --build-toolchain=android \
+            --arch="${{ steps.build_params.outputs.target_arch }}" \
+            --enable-jni \
+            ${{ steps.build_params.outputs.build_type }}
+        )
 
     - name: Upload Generated APK as Artifact
       uses: actions/upload-artifact@v4
@@ -133,3 +134,4 @@ jobs:
         echo "- **Download APK:** Check the 'Artifacts' section below for the generated APK file."
         echo "---"
         echo "If the build failed, review the logs above for specific error messages."
+        
