@@ -1,13 +1,24 @@
+# .gitpod.yml
+# https://www.gitpod.io/docs/configure/workspaces/workspace-image
+
 image:
   file: .gitpod.Dockerfile
 
 tasks:
   - name: Setup & Prepare
     init: |
-      # Dieses Skript wird in der Regel nur einmal ausgeführt, um die Struktur zu initialisieren.
-      # ./setup_gitpod_project.sh # Nicht rekursiv aufrufen!
+      # Wenn Sie das "setup_gitpod_project.sh"-Skript weiter verwenden möchten,
+      # um Platzhalter-Ordner/Dateien zu erstellen, können Sie es hier aufrufen:
+      # ./setup_gitpod_project.sh
       echo "Gitpod Umgebung wird basierend auf Dockerfile und requirements.txt vorbereitet."
+      # Der Test-Datensatz wird bereits im Dockerfile heruntergeladen.
     command: |
       echo "Workspace ist bereit. Führen Sie Ihr Training aus mit: python train_model.py"
-      # Halten Sie das Terminal offen, damit der Container nicht sofort beendet wird.
+      # Der CMD-Befehl im Dockerfile startet train_model.py automatisch.
+      # Sie können das Skript hier explizit aufrufen, wenn Sie mehr Kontrolle benötigen.
+      # python train_model.py --data_dir ./data/speech_commands_test --output_dir ./output
+      # Halten Sie das Terminal offen, damit der Container nicht sofort beendet wird,
+      # falls das Trainingsskript schnell durchläuft.
       tail -f /dev/null
+
+      
