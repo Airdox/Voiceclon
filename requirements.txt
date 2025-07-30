@@ -1,4 +1,4 @@
-l# Python-Abhängigkeiten für Stimmmodelltraining
+# Python-Abhängigkeiten für Stimmmodelltraining
 # Generiert am 2025-07-30
 
 tensorflow==2.10.0

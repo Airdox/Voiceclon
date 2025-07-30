@@ -20,5 +20,3 @@ tasks:
       # Halten Sie das Terminal offen, damit der Container nicht sofort beendet wird,
       # falls das Trainingsskript schnell durchläuft.
       tail -f /dev/null
-
-      
