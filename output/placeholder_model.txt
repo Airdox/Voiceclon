@@ -1,1 +1,0 @@
-Hier wird Ihr trainiertes Stimmmodell (z.B. .h5, .pth) und andere Trainingsergebnisse gespeichert.
