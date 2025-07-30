@@ -1,0 +1,7 @@
+# Beispiel Python-Abhängigkeiten für Stimmmodelltraining
+tensorflow==2.10.0
+librosa==0.9.1
+numpy==1.22.4
+scipy==1.8.0
+soundfile==0.12.1
+matplotlib
